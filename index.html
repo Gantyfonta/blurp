@@ -1,11 +1,198 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; URL=signup.html" />
-  <title>Mini Discord Clone</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blurp Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { margin:0; font-family:'Inter',sans-serif; height:100vh; display:flex; background:#f3f4f6; }
+    .sidebar { width:280px; background:#1f2937; color:white; display:flex; flex-direction:column; padding:1rem; }
+    .sidebar h2 { margin-top:0; font-size:1.1rem; }
+    .friend,.request { padding:0.5rem; border-radius:0.5rem; margin-bottom:0.5rem; cursor:pointer; }
+    .friend:hover,.request:hover { background:#374151; }
+    .friend.active { background:#2563eb; }
+    .request button { margin-left:0.5rem; padding:0.25rem 0.5rem; border:none; border-radius:0.25rem; background:#10b981; color:white; cursor:pointer; }
+    .chat-container { flex:1; display:flex; flex-direction:column; }
+    .chat-header { background:white; padding:1rem; border-bottom:1px solid #e5e7eb; font-weight:600; }
+    .chat-messages { flex:1; padding:1rem; overflow-y:auto; }
+    .chat-input { display:flex; padding:1rem; border-top:1px solid #e5e7eb; background:white; }
+    .chat-input input { flex:1; padding:0.75rem; border:1px solid #d1d5db; border-radius:0.5rem; margin-right:0.5rem; }
+    .chat-input button { background:#2563eb; color:white; border:none; border-radius:0.5rem; padding:0.75rem 1.25rem; font-weight:600; cursor:pointer; }
+    .chat-input button:hover { background:#1e40af; }
+  </style>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, addDoc, query, where, getDocs, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC0w1ZCu9NVJ9bcP2jT5rhkmtO5pxrPg10",
+      authDomain: "blurp-9054f.firebaseapp.com",
+      projectId: "blurp-9054f",
+      storageBucket: "blurp-9054f.appspot.com",
+      messagingSenderId: "805595939005",
+      appId: "1:805595939005:web:bea29d020a13f3f28e37d4"
+    };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let activeFriend = null;
+
+    window.addEventListener("DOMContentLoaded", () => {
+      // Build layout
+      document.body.innerHTML = `
+        <div class="sidebar">
+          <h2>Friends</h2>
+          <div id="friends-list"></div>
+          <h2>Requests</h2>
+          <div id="requests-list"></div>
+          <h2>Add Friend</h2>
+          <input type="text" id="friend-email" placeholder="Enter email" style="padding:0.5rem;border-radius:0.5rem;border:none;width:100%;margin-bottom:0.5rem;">
+          <button onclick="sendFriendRequest()" style="padding:0.5rem;border:none;background:#2563eb;color:white;border-radius:0.5rem;cursor:pointer;">Send Request</button>
+          <button onclick="logout()" style="margin-top:auto;padding:0.5rem;border:none;background:#dc2626;color:white;border-radius:0.5rem;cursor:pointer;">Logout</button>
+        </div>
+        <div class="chat-container">
+          <div class="chat-header" id="chat-header">Select a friend</div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input">
+            <input type="text" id="message-input" placeholder="Type a message..."/>
+            <button id="send-btn">Send</button>
+          </div>
+        </div>`;
+      document.getElementById("send-btn").addEventListener("click", sendMessage);
+    });
+
+    // Auth
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        watchFriends();
+        watchRequests();
+      } else {
+        window.location.href = "signin.html";
+      }
+    });
+
+    // Send friend request
+    window.sendFriendRequest = async function() {
+      const email = document.getElementById("friend-email").value.trim();
+      if (!email || email === currentUser.email) return;
+      // Look up user
+      const q = query(collection(db, "users"), where("email","==",email));
+      const snap = await getDocs(q);
+      if (snap.empty) return alert("No user found.");
+      const userDoc = snap.docs[0].data();
+      await addDoc(collection(db,"friendRequests"), {
+        fromUid: currentUser.uid,
+        fromEmail: currentUser.email,
+        toUid: userDoc.uid,
+        toEmail: userDoc.email,
+        status: "pending"
+      });
+      alert("Request sent!");
+      document.getElementById("friend-email").value="";
+    };
+
+    // Watch incoming requests
+    function watchRequests() {
+      const q = query(collection(db,"friendRequests"), where("toUid","==",currentUser.uid), where("status","==","pending"));
+      onSnapshot(q,(snap)=>{
+        const list = document.getElementById("requests-list");
+        list.innerHTML="";
+        snap.forEach(docSnap=>{
+          const req = docSnap.data();
+          const div = document.createElement("div");
+          div.className="request";
+          div.textContent=`${req.fromEmail}`;
+          const btn=document.createElement("button");
+          btn.textContent="Accept";
+          btn.onclick=()=>acceptRequest(docSnap.id,req);
+          div.appendChild(btn);
+          list.appendChild(div);
+        });
+      });
+    }
+
+    async function acceptRequest(reqId,req) {
+      await setDoc(doc(db,"friendRequests",reqId), {...req,status:"accepted"});
+    }
+
+    // Watch accepted friends
+    function watchFriends() {
+      const q1 = query(collection(db,"friendRequests"), where("fromUid","==",currentUser.uid), where("status","==","accepted"));
+      const q2 = query(collection(db,"friendRequests"), where("toUid","==",currentUser.uid), where("status","==","accepted"));
+      function renderFriend(req) {
+        const friendUid = req.fromUid===currentUser.uid?req.toUid:req.fromUid;
+        const friendEmail = req.fromUid===currentUser.uid?req.toEmail:req.fromEmail;
+        const div=document.createElement("div");
+        div.className="friend";
+        div.textContent=friendEmail;
+        div.onclick=()=>selectFriend({uid:friendUid,email:friendEmail},div);
+        return div;
+      }
+      function listen(q) {
+        onSnapshot(q,(snap)=>{
+          const list=document.getElementById("friends-list");
+          snap.forEach(docSnap=>{
+            const req=docSnap.data();
+            if(!document.querySelector(`[data-id="${docSnap.id}"]`)) {
+              const div=renderFriend(req);
+              div.setAttribute("data-id",docSnap.id);
+              list.appendChild(div);
+            }
+          });
+        });
+      }
+      listen(q1); listen(q2);
+    }
+
+    function selectFriend(friend,el) {
+      activeFriend=friend;
+      document.getElementById("chat-header").textContent=`Chat with ${friend.email}`;
+      document.querySelectorAll(".friend").forEach(f=>f.classList.remove("active"));
+      el.classList.add("active");
+      loadMessages();
+    }
+
+    function loadMessages() {
+      if (!activeFriend) return;
+      const chatId=getChatId(currentUser.uid,activeFriend.uid);
+      const q=query(collection(db,"chats",chatId,"messages"),orderBy("timestamp","asc"));
+      onSnapshot(q,(snap)=>{
+        const box=document.getElementById("chat-messages");
+        box.innerHTML="";
+        snap.forEach(docSnap=>{
+          const msg=docSnap.data();
+          const div=document.createElement("div");
+          div.className="message";
+          div.innerHTML=`<strong>${msg.senderEmail}:</strong> ${msg.text}`;
+          box.appendChild(div);
+        });
+        box.scrollTop=box.scrollHeight;
+      });
+    }
+
+    async function sendMessage() {
+      if(!activeFriend) return;
+      const text=document.getElementById("message-input").value.trim();
+      if(!text) return;
+      const chatId=getChatId(currentUser.uid,activeFriend.uid);
+      await addDoc(collection(db,"chats",chatId,"messages"), {
+        text,
+        senderId:currentUser.uid,
+        senderEmail:currentUser.email,
+        timestamp:new Date()
+      });
+      document.getElementById("message-input").value="";
+    }
+
+    function getChatId(uid1,uid2){ return [uid1,uid2].sort().join("_"); }
+    window.logout=function(){ signOut(auth); };
+  </script>
 </head>
-<body>
-  <p>Redirecting to signup...</p>
-</body>
+<body></body>
 </html>
