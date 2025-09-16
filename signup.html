@@ -1,43 +1,15 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sign Up / Sign In — Mini Chat</title>
-  <style>
-    body{font-family:system-ui,Arial;margin:2rem}
-    input{display:block;margin:0.5rem 0;padding:0.5rem;width:300px}
-    .hint{color:#666;font-size:0.9rem}
-  </style>
-</head>
-<body>
-  <h1>Mini Chat — Sign Up / Sign In</h1>
-  <div id="auth-forms">
-    <div id="signup">
-      <h2>Create account</h2>
-      <input id="su-email" placeholder="Email" />
-      <input id="su-password" placeholder="Password" type="password" />
-      <button id="btn-signup">Create account</button>
-    </div>
-
-    <hr />
-
-    <div id="signin">
-      <h2>Sign in</h2>
-      <input id="si-email" placeholder="Email" />
-      <input id="si-password" placeholder="Password" type="password" />
-      <button id="btn-signin">Sign in</button>
-    </div>
-
-    <p class="hint">After sign-in you'll be redirected to <code>app.html</code>.</p>
-  </div>
-
+  <meta charset="UTF-8" />
+  <title>Sign Up</title>
   <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
-    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+    // Import Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
 
-    // ✅ Your Firebase config
+    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyC0w1ZCu9NVJ9bcP2jT5rhkmtO5pxrPg10",
       authDomain: "blurp-9054f.firebaseapp.com",
@@ -52,26 +24,40 @@
     const auth = getAuth(app);
     const db = getFirestore(app);
 
-    document.getElementById('btn-signup').addEventListener('click', async () => {
-      const email = document.getElementById('su-email').value.trim();
-      const pass = document.getElementById('su-password').value;
-      try {
-        const cred = await createUserWithEmailAndPassword(auth, email, pass);
-        await setDoc(doc(db, 'users', cred.user.uid), { uid: cred.user.uid, email });
-        window.location.href = 'app.html';
-      } catch(err) { alert('Signup error: ' + err.message); }
-    });
+    async function signUpUser(e) {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
 
-    document.getElementById('btn-signin').addEventListener('click', async () => {
-      const email = document.getElementById('si-email').value.trim();
-      const pass = document.getElementById('si-password').value;
       try {
-        await signInWithEmailAndPassword(auth, email, pass);
-        window.location.href = 'app.html';
-      } catch(err) { alert('Signin error: ' + err.message); }
-    });
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-    onAuthStateChanged(auth, user => { if(user) window.location.href = 'app.html'; });
+        // Save user profile in Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          email: user.email
+        });
+
+        alert("Account created! You can now sign in.");
+        window.location.href = "signin.html";
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("signup-form").addEventListener("submit", signUpUser);
+    });
   </script>
+</head>
+<body>
+  <h1>Sign Up</h1>
+  <form id="signup-form">
+    <input type="email" id="email" placeholder="Email" required><br>
+    <input type="password" id="password" placeholder="Password" required><br>
+    <button type="submit">Sign Up</button>
+  </form>
+  <p>Already have an account? <a href="signin.html">Sign in</a></p>
 </body>
 </html>
