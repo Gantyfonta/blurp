@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini Chat — App</title>
+  <style>
+    body{font-family:system-ui,Arial;margin:1rem}
+    #users{float:left;width:260px;border-right:1px solid #ddd;padding-right:1rem}
+    #chat{margin-left:280px}
+    .user{padding:0.5rem;cursor:pointer}
+    .user:hover{background:#f0f0f0}
+    #messages{height:400px;overflow:auto;border:1px solid #ddd;padding:0.5rem}
+    #msg-input{width:80%}
+  </style>
+</head>
+<body>
+  <h1>Mini Chat</h1>
+  <button id="btn-signout">Sign out</button>
+  <div>
+    <div id="users">
+      <h3>People</h3>
+      <input id="add-email" placeholder="Add friend by email" />
+      <button id="btn-add">Add</button>
+      <div id="users-list"></div>
+    </div>
+
+    <div id="chat">
+      <h3 id="chat-with">Pick a person to DM</h3>
+      <div id="messages"></div>
+      <div id="composer" style="margin-top:0.5rem;display:none">
+        <input id="msg-input" placeholder="Write a message" />
+        <button id="btn-send">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { getFirestore, doc, collection, query, where, getDocs, onSnapshot, addDoc, orderBy } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+
+    // ✅ Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyC0w1ZCu9NVJ9bcP2jT5rhkmtO5pxrPg10",
+      authDomain: "blurp-9054f.firebaseapp.com",
+      projectId: "blurp-9054f",
+      storageBucket: "blurp-9054f.appspot.com",
+      messagingSenderId: "805595939005",
+      appId: "1:805595939005:web:bea29d020a13f3f28e37d4",
+      measurementId: "G-DZE0JXPS8G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const usersList = document.getElementById('users-list');
+    const addEmailInput = document.getElementById('add-email');
+    const btnAdd = document.getElementById('btn-add');
+    const messagesEl = document.getElementById('messages');
+    const composer = document.getElementById('composer');
+    const chatWith = document.getElementById('chat-with');
+    const btnSend = document.getElementById('btn-send');
+    const msgInput = document.getElementById('msg-input');
+    const btnSignout = document.getElementById('btn-signout');
+
+    let currentUser = null;
+    let currentPeer = null;
+    let unsubscribeMessages = null;
+
+    onAuthStateChanged(auth, async user => {
+      if(!user) { window.location.href = 'signup.html'; return; }
+      currentUser = { uid: user.uid, email: user.email };
+      loadPeople();
+    });
+
+    btnSignout.addEventListener('click', () => signOut(auth).then(()=>window.location.href='signup.html'));
+
+    async function loadPeople(){
+      usersList.innerHTML = '';
+      const snapshot = await getDocs(collection(db, 'users'));
+      snapshot.forEach(docSnap => {
+        const u = docSnap.data();
+        if(u.uid === currentUser.uid) return;
+        const div = document.createElement('div');
+        div.className = 'user';
+        div.textContent = u.email;
+        div.dataset.uid = u.uid;
+        div.addEventListener('click', () => openDM(u));
+        usersList.appendChild(div);
+      });
+    }
+
+    btnAdd.addEventListener('click', async () => {
+      const email = addEmailInput.value.trim();
+      if(!email) return alert('enter an email');
+      const q = query(collection(db, 'users'), where('email', '==', email));
+      const snap = await getDocs(q);
+      if(snap.empty) return alert('No user with that email');
+      alert('User found! They should appear in your list.');
+      loadPeople();
+      addEmailInput.value = '';
+    });
+
+    function convoId(a,b){ return [a,b].sort().join('_'); }
+
+    function openDM(peer){
+      if(unsubscribeMessages) unsubscribeMessages();
+      currentPeer = peer;
+      chatWith.textContent = 'Chat with ' + peer.email;
+      composer.style.display = 'block';
+      messagesEl.innerHTML = '';
+
+      const id = convoId(currentUser.uid, peer.uid);
+      const msgsCol = collection(db, 'conversations', id, 'messages');
+      const q = query(msgsCol, orderBy('createdAt'));
+      unsubscribeMessages = onSnapshot(q, snap => {
+        messagesEl.innerHTML = '';
+        snap.forEach(docSnap => {
+          const m = docSnap.data();
+          const div = document.createElement('div');
+          div.textContent = (m.from === currentUser.uid ? 'You: ' : peer.email+': ') + m.text;
+          messagesEl.appendChild(div);
+        });
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+    }
+
+    btnSend.addEventListener('click', async () => {
+      const text = msgInput.value.trim();
+      if(!text || !currentPeer) return;
+      const id = convoId(currentUser.uid, currentPeer.uid);
+      const msgsCol = collection(db, 'conversations', id, 'messages');
+      await addDoc(msgsCol, { text, from: currentUser.uid, to: currentPeer.uid, createdAt: Date.now() });
+      msgInput.value = '';
+    });
+  </script>
+</body>
+</html>
