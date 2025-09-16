@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Sign In</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC0w1ZCu9NVJ9bcP2jT5rhkmtO5pxrPg10",
+      authDomain: "blurp-9054f.firebaseapp.com",
+      projectId: "blurp-9054f",
+      storageBucket: "blurp-9054f.appspot.com",
+      messagingSenderId: "805595939005",
+      appId: "1:805595939005:web:bea29d020a13f3f28e37d4",
+      measurementId: "G-DZE0JXPS8G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    async function signInUser(e) {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        alert("Signed in!");
+        window.location.href = "index.html"; // your main chat app
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("signin-form").addEventListener("submit", signInUser);
+    });
+  </script>
+</head>
+<body>
+  <h1>Sign In</h1>
+  <form id="signin-form">
+    <input type="email" id="email" placeholder="Email" required><br>
+    <input type="password" id="password" placeholder="Password" required><br>
+    <button type="submit">Sign In</button>
+  </form>
+  <p>No account? <a href="signup.html">Sign up</a></p>
+</body>
+</html>
